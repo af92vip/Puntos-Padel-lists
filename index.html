@@ -71,15 +71,16 @@ input, select {
 let nombres = [];
 let stats = [];
 let parejasUsadas = new Set();
+let rondaActual = [];
 
 function crearJugadores() {
-  nombres = [];
-  stats = [];
   parejasUsadas.clear();
+  stats = [];
   let n = numPlayers.value;
   let html = "";
   for (let i = 0; i < n; i++) {
     html += `<input id="j${i}" placeholder="Jugador ${i+1}">`;
+    stats.push({ puntos: 0, juegos: 0 });
   }
   inputs.innerHTML = html;
   partidos.innerHTML = "";
@@ -89,63 +90,90 @@ function crearJugadores() {
 function nuevaRonda() {
   let n = numPlayers.value;
   nombres = [];
+
   for (let i = 0; i < n; i++) {
-    let v = document.getElementById("j"+i)?.value;
-    if (!v) return alert("Faltan nombres");
-    nombres.push(v);
-    if (!stats[i]) stats[i] = { puntos:0, juegos:0 };
+    let nombre = document.getElementById("j"+i).value;
+    if (!nombre) {
+      alert("Faltan nombres");
+      return;
+    }
+    nombres.push(nombre);
   }
 
-  let disp = [...Array(n).keys()];
-  let juegos = [];
+  let indices = [...Array(n).keys()];
+  let usadosRonda = new Set();
+  rondaActual = [];
 
-  while (disp.length >= 4) {
-    let a = disp.shift();
-    let b = disp.find(x => !parejasUsadas.has(key(a,x)));
-    if (b === undefined) break;
-    disp = disp.filter(x => x !== b);
-    let c = disp.shift();
-    let d = disp.shift();
-    parejasUsadas.add(key(a,b));
-    parejasUsadas.add(key(c,d));
-    juegos.push([a,b,c,d]);
+  function parejaUsada(a,b) {
+    return parejasUsadas.has([a,b].sort().join("-"));
   }
 
-  if (!juegos.length) return alert("Ya jugaron todos con todos");
+  while (indices.length >= 4) {
+    let a = indices.shift();
 
-  mostrar(juegos);
+    let bIndex = indices.findIndex(x => !parejaUsada(a,x));
+    if (bIndex === -1) break;
+
+    let b = indices.splice(bIndex,1)[0];
+    let c = indices.shift();
+    let d = indices.shift();
+
+    rondaActual.push([a,b,c,d]);
+    usadosRonda.add([a,b].sort().join("-"));
+    usadosRonda.add([c,d].sort().join("-"));
+  }
+
+  if (rondaActual.length === 0) {
+    alert("✅ Ya se jugaron todas las combinaciones posibles");
+    return;
+  }
+
+  mostrarPartidos(rondaActual);
 }
 
-function mostrar(juegos) {
+function mostrarPartidos(juegos) {
   let max = gamePoints.value;
-  let ops = max==6 ? ["6-0","5-1","4-2","3-3"] : ["8-0","7-1","6-2","5-3","4-4"];
+  let opciones = max == 6
+    ? ["6-0","5-1","4-2","3-3"]
+    : ["8-0","7-1","6-2","5-3","4-4"];
+
   partidos.innerHTML = juegos.map(j => `
     <div class="card">
       ${nombres[j[0]]} + ${nombres[j[1]]}
       vs
       ${nombres[j[2]]} + ${nombres[j[3]]}
-      <select onchange="guardar('${j}',this.value)">
+      <select onchange="guardarResultado('${j}',this.value)">
         <option value="">Resultado</option>
-        ${ops.map(o=>`<option>${o}</option>`).join("")}
+        ${opciones.map(o=>`<option>${o}</option>`).join("")}
       </select>
     </div>
   `).join("");
 }
 
-function guardar(j,res){
-  if(!res) return;
-  let [a,b]=res.split("-").map(Number);
-  let p=j.split(",").map(Number);
-  stats[p[0]].puntos+=a; stats[p[1]].puntos+=a;
-  stats[p[2]].puntos+=b; stats[p[3]].puntos+=b;
-  p.forEach(i=>stats[i].juegos++);
-  tabla.innerHTML = nombres.map((n,i)=>`${n} — ${stats[i].puntos} pts`).join("<br>");
+function guardarResultado(j,res) {
+  if (!res) return;
+
+  let [a,b] = res.split("-").map(Number);
+  let p = j.split(",").map(Number);
+
+  stats[p[0]].puntos += a;
+  stats[p[1]].puntos += a;
+  stats[p[2]].puntos += b;
+  stats[p[3]].puntos += b;
+
+  p.forEach(i => stats[i].juegos++);
+
+  // Guardar parejas SOLO después del partido
+  parejasUsadas.add([p[0],p[1]].sort().join("-"));
+  parejasUsadas.add([p[2],p[3]].sort().join("-"));
+
+  actualizarTabla();
 }
 
-function key(a,b){ return [a,b].sort().join("-"); }
-
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js");
+function actualizarTabla() {
+  tabla.innerHTML = nombres
+    .map((n,i)=>`${n} — ${stats[i].puntos} pts`)
+    .join("<br>");
 }
 </script>
 
